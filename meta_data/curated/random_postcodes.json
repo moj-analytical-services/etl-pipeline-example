@@ -1,0 +1,174 @@
+{
+    "$schema": "https://raw.githubusercontent.com/moj-analytical-services/etl_manager/master/etl_manager/specs/table_schema.json",
+    "name": "random_postcodes",
+    "description": "Example table to demo MoJ DE team etl process",
+    "data_format": "parquet",
+    "columns": [
+        {
+            "name": "index",
+            "type": "int",
+            "description": "index from postcodes.io API"
+        },
+        {
+            "name": "postcode",
+            "type": "character",
+            "description": "postcode from postcodes.io API"
+        },
+        {
+            "name": "quality",
+            "type": "int",
+            "description": "quality from postcodes.io API"
+        },
+        {
+            "name": "eastings",
+            "type": "int",
+            "description": "eastings from postcodes.io API"
+        },
+        {
+            "name": "northings",
+            "type": "int",
+            "description": "northings from postcodes.io API"
+        },
+        {
+            "name": "country",
+            "type": "character",
+            "description": "country from postcodes.io API"
+        },
+        {
+            "name": "nhs_ha",
+            "type": "character",
+            "description": "nhs_ha from postcodes.io API"
+        },
+        {
+            "name": "longitude",
+            "type": "double",
+            "description": "longitude from postcodes.io API"
+        },
+        {
+            "name": "latitude",
+            "type": "double",
+            "description": "latitude from postcodes.io API"
+        },
+        {
+            "name": "european_electoral_region",
+            "type": "character",
+            "description": "european_electoral_region from postcodes.io API"
+        },
+        {
+            "name": "primary_care_trust",
+            "type": "character",
+            "description": "primary_care_trust from postcodes.io API"
+        },
+        {
+            "name": "region",
+            "type": "character",
+            "description": "region from postcodes.io API"
+        },
+        {
+            "name": "lsoa",
+            "type": "character",
+            "description": "lsoa from postcodes.io API"
+        },
+        {
+            "name": "msoa",
+            "type": "character",
+            "description": "msoa from postcodes.io API"
+        },
+        {
+            "name": "incode",
+            "type": "character",
+            "description": "incode from postcodes.io API"
+        },
+        {
+            "name": "outcode",
+            "type": "character",
+            "description": "outcode from postcodes.io API"
+        },
+        {
+            "name": "parliamentary_constituency",
+            "type": "character",
+            "description": "parliamentary_constituency from postcodes.io API"
+        },
+        {
+            "name": "admin_district",
+            "type": "character",
+            "description": "admin_district from postcodes.io API"
+        },
+        {
+            "name": "parish",
+            "type": "character",
+            "description": "parish from postcodes.io API"
+        },
+        {
+            "name": "admin_county",
+            "type": "character",
+            "description": "admin_county from postcodes.io API"
+        },
+        {
+            "name": "admin_ward",
+            "type": "character",
+            "description": "admin_ward from postcodes.io API"
+        },
+        {
+            "name": "ced",
+            "type": "character",
+            "description": "ced from postcodes.io API"
+        },
+        {
+            "name": "ccg",
+            "type": "character",
+            "description": "ccg from postcodes.io API"
+        },
+        {
+            "name": "nuts",
+            "type": "character",
+            "description": "nuts from postcodes.io API"
+        },
+        {
+            "name": "codes_admin_district",
+            "type": "character",
+            "description": "codes_admin_district from postcodes.io API"
+        },
+        {
+            "name": "codes_admin_county",
+            "type": "character",
+            "description": "codes_admin_county from postcodes.io API"
+        },
+        {
+            "name": "codes_admin_ward",
+            "type": "character",
+            "description": "codes_admin_ward from postcodes.io API"
+        },
+        {
+            "name": "codes_parish",
+            "type": "character",
+            "description": "codes_parish from postcodes.io API"
+        },
+        {
+            "name": "codes_parliamentary_constituency",
+            "type": "character",
+            "description": "codes_parliamentary_constituency from postcodes.io API"
+        },
+        {
+            "name": "codes_ccg",
+            "type": "character",
+            "description": "codes_ccg from postcodes.io API"
+        },
+        {
+            "name": "codes_ced",
+            "type": "character",
+            "description": "codes_ced from postcodes.io API"
+        },
+        {
+            "name": "codes_nuts",
+            "type": "character",
+            "description": "codes_nuts from postcodes.io API"
+        },
+        {
+            "name": "dea_version",
+            "type": "character",
+            "description": "Github release marking the docker version used to build this table"
+        }
+    ],
+    "location": "random_postcodes"
+}

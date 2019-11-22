@@ -1,0 +1,6 @@
+{
+    "description": "Example database for DE pipeline",
+    "name": "example_postcodes_db",
+    "bucket": "alpha-curated-postcodes-example",
+    "base_folder": "database"
+}

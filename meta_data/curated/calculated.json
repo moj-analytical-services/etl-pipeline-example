@@ -1,0 +1,30 @@
+{
+    "$schema": "https://raw.githubusercontent.com/moj-analytical-services/etl_manager/master/etl_manager/specs/table_schema.json",
+    "name": "calculated",
+    "description": "Example derived table to demo MoJ DE team etl process",
+    "data_format": "parquet",
+    "columns": [
+        {
+            "name": "european_electoral_region",
+            "type": "character",
+            "description": "european_electoral_region from random_postcodes table"
+        },
+        {
+            "name": "n",
+            "type": "int",
+            "description": "Count of the total number of european_electoral_region in the random_postcodes table"
+        },
+        {
+            "name": "dea_version",
+            "type": "character",
+            "description": "Github release marking the docker version used to build this table"
+        },
+        {
+            "name": "dea_snapshot_date",
+            "type": "date",
+            "description": "File partition denoting when the calculation was ran"
+        }
+    ],
+    "location": "random_postcodes",
+    "partitions": ["dea_snapshot_date"]
+}
