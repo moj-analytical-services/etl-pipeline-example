@@ -643,6 +643,6 @@ We don't have a hard rule for this again it's very dependant on what your pipeli
 - [pySpark docs v2.2.1](http://spark.apache.org/docs/2.2.1/api/python/index.html)
 - [serverless security](https://youtu.be/byJBR16xUnc)
 - [Airflow pitfalls](https://cwiki.apache.org/confluence/display/AIRFLOW/Common+Pitfalls)
-- [Airflow meetup - airflow basics](https://drive.google.com/file/d/1URM3JZYFpZ4D8SbGil9RcdaYuNQBiglo/view?usp=sharing)
-- [Airflow meetup - just eat](https://drive.google.com/file/d/1DVN4HXtOC-HXvv00sEkoB90mxLDnCIKc/view?usp=sharing)
+- [Airflow meetup - airflow basics](https://drive.google.com/file/d/1DVN4HXtOC-HXvv00sEkoB90mxLDnCIKc/view?usp=sharing)
+- [Airflow meetup - just eat](https://drive.google.com/file/d/1URM3JZYFpZ4D8SbGil9RcdaYuNQBiglo/view?usp=sharing)
 - [Data Engineering Team Principals](https://docs.google.com/document/d/1tJShbVnZqW8X8ULCAsHVx1y6dbFp1MFsnWFxBBzvpw8/edit?usp=sharing) _might be a lil' outdated_
