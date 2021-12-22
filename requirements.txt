@@ -1,2 +1,2 @@
--e git+git://github.com/moj-analytical-services/etl_manager.git@v2.2.2#egg=etl_manager
--e git+git://github.com/moj-analytical-services/gluejobutils.git@v1.0.1#egg=gluejobutils
+etl_manager
+gluejobutils

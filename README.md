@@ -8,7 +8,7 @@ An example on how to build a data ETL pipeline in the data engineering team with
 
 The image above lays out the processing structure. We are going to go through an overview of why we try to adhere to this structure and will try to use the problem set above to explain how we are going to apply this structure to the problem set.
 
-The first thing to note is our tech stack. We use S3 for data storage, our transformation logic to move data from A to B is not restricted to but normally carried out in Python or Spark (SQL). These scripts are versioned on GitHub and ran as Dockerised containers on our Kubernetes Cluster. The orestration of these tasks to run our full pipeline is managed by Airflow.
+The first thing to note is our tech stack. We use S3 for data storage, our transformation logic to move data from A to B is not restricted to but normally carried out in Python or Spark (SQL). These scripts are versioned on GitHub and ran as Dockerised containers on our Kubernetes Cluster. The orchestration of these tasks to run our full pipeline is managed by Airflow.
 
 ### Landing Area
 
@@ -122,6 +122,17 @@ Once your curated tables are produced you will want to overlay your glue schema 
 4. Apply the athena schema to the data
 5. All the above is going to be Dockerise and orchestrated by Airflow
 
+### Step 0: Pass in credentials
+
+This repo assumes that you are using aws-vault to pass in your credentials.
+See [this link](https://github.com/ministryofjustice/analytical-platform-iam/blob/main/documentation/AWS-CLI.md) for instructions on setting up your cli tool to authenticate with AWS using aws-vault.
+
+Exec into the restricted-data role, which will give you permission to write to S3 for a period of 4h:
+
+```bash
+$ aws-vault exec restricted-data -d 4h
+```
+
 ### Step 1: Get that data
 
 Often we get sent data from external data supliers in all manners of mess. In this example we are going to control the data we pull ourselves. We are going to write a simple script that pulls 1000 postcodes from this (amazing) API called [postcodes.io](https://postcodes.io/) and writes it to a folder for us. As stated we control the extraction so we get to apply best practices here and write the data to a location in S3 that's partitioned correctly.
@@ -231,7 +242,7 @@ s3_out = os.path.join(land_base_path, 'random_postcodes', f'file_land_timestamp=
 write_dicts_to_jsonl_gz(data, s3_out)
 ```
 
-The full script (where it's all put together) can be found in [python_scripts/write_data_to_land.py](python_scripts/write_data_to_land.py) this is `F0(x)` in the DE structure overview. It's also worth noting that in these python scripts we always use the convention `if __name__ == '__main__'` this is so we can run the scripts or import them - [see here for more information](https://thepythonguru.com/what-is-if-__name__-__main__/).
+The full script (where it's all put together) can be found in [python_scripts/write_data_to_land.py](python_scripts/write_data_to_land.py) this is `F0(x)` in the DE structure overview. It's also worth noting that in these python scripts we always use the convention `if __name__ == '__main__'` this is so we can run the scripts or import them - [see here for more information](https://thepythonguru.com/what-is-if-__name__-__main__/). You should check that the data has been saved to s3://mojap-land/open_data/postcodes_example/random_postcodes/.
 
 This script will be put onto a daily schedule using a dag later on. You'll note in the full script that there is an excessive amount of print statements. This is because we want to be as verbose as possible so that when logs are written to airflow it will be easier to debug if something breaks. 
 
@@ -275,13 +286,13 @@ s3.copy_s3_object(data_path, raw_hist_out)
 s3.delete_s3_object(data_path)
 ```
 
-The full script that utilises these code snippets can be found in [python_scripts/test_data.py](python_scripts/test_data.py) this is `F1(x)` in the DE structure overview.
+The full script that utilises these code snippets can be found in [python_scripts/test_data.py](python_scripts/test_data.py) this is `F1(x)` in the DE structure overview. You should check that the data has been deleted from s3://mojap-land/open_data/postcodes_example/random_postcodes/ and saved to s3://mojap-raw-hist/open_data/postcodes_example/random_postcodes/.
 
 ### Step 3: Create the Database Tables (using spark)
 
-In this step we are going to use spark to create our curated database (reading data from `raw-hist` and writing to `curated`) and then apply a glue meta data schema over the top of the data so it can be queried with Amazon athena. To do both of these things requires `etl_manager` the readme of this package is fairly indepth so I'm not going to reiterate information from that readme here. 
+In this step we are going to use spark to create our curated database (reading data from `raw-hist` and writing to `curated`) and then apply a glue meta data schema over the top of the data so it can be queried with Amazon athena. To do both of these things requires `etl_manager`. The [readme](https://github.com/moj-analytical-services/etl_manager/blob/master/README.md) of this package is fairly indepth so I'm not going to reiterate information from that readme here. 
 
-Our spark jobs (aka glue jobs) is a pyspark script that is ran on an AWS spark server. It is used to do bigger data transformations (in parallel) that is better to keep off our cluster (which current gives you the ability to run R/Python with single CPU). When writing spark scripts try to use Spark-SQL as much as possible to make it easier for others to understand. You may find there are times when a single line of code using the spark dataframe API will achieve the same result as 10 lines of SQL (so it's up to the data engineer to make a judgement on when to deviate from Spark-SQL syntax). Because we use pyspark always use the dataframe API or Spark-SQL as these are optimised (avoid using RRDs as they will be super slow in pyspark).
+Our spark jobs (aka glue jobs) is a pyspark script that is ran on an AWS spark server. It is used to do bigger data transformations (in parallel) that is better to keep off our cluster (which current gives you the ability to run R/Python with single CPU). When writing spark scripts try to use Spark-SQL as much as possible to make it easier for others to understand. You may find there are times when a single line of code using the spark dataframe API will achieve the same result as 10 lines of SQL (so it's up to the data engineer to make a judgement on when to deviate from Spark-SQL syntax). Because we use pyspark always use the dataframe API or Spark-SQL as these are optimised (avoid using Resilient Distributed Datasets (RDDs) as they will be super slow in pyspark as summarised [here](https://databricks.com/glossary/what-is-rdd)).
 
 Our spark code is going to do two things, first read all the data from `raw-hist` and overwrite the table in curated. This is the laziest approach to updating your table (i.e. recreate it from scratch and delete the old version). However, this is the cleanest version and the one you should try first (often it's quicker than trying to do a clever update process in spark - mainly because this often requires writing more than once to S3 which is time consuming). Overwriting everything each time also allows for an easy clean up (as the overwrite means you don't often have to clean up half written files or clear out a temp folder of data you are using update your table). The second thing the spark job will do is create a calculated table (a simple group by statement) and write it to a new partition (based on the date ran) in curated.
 
@@ -369,13 +380,13 @@ calculated.write.mode('overwrite').format(calculated['data_format']).save(calcul
 job.commit()
 ```
 
-The full pyspark script can be found in the following path [`glue_jobs/example_job/job.py`](glue_jobs/example_job/job.py). This is the script that is ran on AWS's spark cluster. For running stuff on the spark cluster we need to have a seperate python script to run the pyspark script. This can simply done as follows:
+The full pyspark script can be found in the following path [`glue_jobs/example_job/job.py`](glue_jobs/example_job/job.py). This is the script that is ran on AWS's spark cluster. For triggering a spark script we need to have a separate python script which is run locally. This can be simply done as follows:
 
 ```python
 from etl_manager.etl import GlueJob
 import datetime
 
-job_bucket = "alpha-curated-postcodes-example
+job_bucket = "alpha-curated-postcodes-example"
 iam_role = "airflow-postcodes-example-role"
 github_tag = "v0.0.1"
 snapshot_date = datetime.datetime.now().strftime("%Y-%m-%d")
@@ -393,7 +404,7 @@ if job.job_run_state == 'SUCCEEDED':
     job.cleanup()
 ```
 
-The actual code we can use in this example can be found at [`python_scripts/run_glue_job.py`](python_scripts/run_glue_job.py). In the full script the parameters listed at the top of the example are defined via environmental variables this is done because the full etl pipeline will be orchestrated via airflow (running a Docker container on our kubernetes cluster). The easiest way to pass parameters to the script is to deploy a pod with environment variables that are your parameters. This allows your scripts to read in those parameters (that will be declared from the airflow script. _More on this later..._)
+The actual code we can use in this example can be found at [`python_scripts/run_glue_job.py`](python_scripts/run_glue_job.py). In the full script the parameters listed at the top of the example are defined via environmental variables. This is done because the full etl pipeline will be orchestrated via airflow (running a Docker container on our kubernetes cluster). The easiest way to pass parameters to the script is to deploy a pod with environment variables that are your parameters. This allows your scripts to read in those parameters (that will be declared from the airflow script. _More on this later..._)
 
 Another note: From the code above you may notice that the script expects to be ran from the root directory of this repo. It's good practice to write your scripts with the idea that they are always running from the root directory of your repo. It makes it easier to know how each script should be called regardless if its `bash`, `python`, `R` or whatever.
 
@@ -457,7 +468,7 @@ This is covered (as well an explaination to the `deploy.json`) in the [platform 
 
 When this task runs on the platform it requires a role to run it. This role needs permissions to access S3, use Athena, Glue, run spark jobs, etc. Ideally this IAM policy should only have actions that it requires but it's difficult to know what this is. The best thing to do is to look at existing repos and see what the IAM policy is and iterate from there. Any of our repos that are deployed on airflow are prefixed with `airflow_` so it's worth looking through those / using this one as a starter. The main thing to try and ensure is that you only give s3 access to what you need for example, in this repo, we don't allow access to the `mojap-land` bucket. Instead we only give the role access to a subset of the bucket (i.e. `mojap-land/open_data/postcodes/` only what it needs to see). This project's IAM policy is again in the root dir of the repo `iam_policy.json`. Also worth noting that the list of actions you'll probably need for an etl project are [s3](https://docs.aws.amazon.com/IAM/latest/UserGuide/list_amazons3.html), [glue](https://docs.aws.amazon.com/IAM/latest/UserGuide/list_awsglue.html), [athena](https://docs.aws.amazon.com/IAM/latest/UserGuide/list_amazonathena.html) and maybe [cloudwatch](https://docs.aws.amazon.com/IAM/latest/UserGuide/list_amazoncloudwatch.html).
 
-The iam policy used for this pipeline can be found [iam_policy.json](iam_policy.json) (again in the root directory - based on how we deploy etl_pipelines). Each sid states what it's there for but here is a quick explaination as to why they are used for this policy:
+The iam policy used for this pipeline can be found [iam_policy.json](iam_policy.json) (again in the root directory - based on how we deploy etl_pipelines). Each sid states what it's there for but here is a quick explanation as to why they are used for this policy:
 
 - `list`: To list the buckets that the role needs to access. Must actions require the role to list the buckets it has to access. Note for the list policy you specify the bucket only not the path to objects (with wildcards). This is why the sid is not included with the latter ones as the resources for the listBucket action is bucket specific (instead of object specific).
 

@@ -17,11 +17,11 @@ from gluejobutils.datatypes import align_df_to_meta
 args = getResolvedOptions(sys.argv, ['JOB_NAME', 'metadata_base_path', 'github_tag', 'snapshot_date'])
 
 # Good practice to print out arguments for debugging
-print "JOB SPECS..."
-print "JOB_NAME: ", args["JOB_NAME"]
-print "metadata_base_path: ", args["metadata_base_path"]
-print "GITHUB_TAG: ", args["github_tag"]
-print "SNAPSHOT_DATE: ", args["snapshot_date"]
+print("JOB SPECS...")
+print(f"JOB_NAME: {args['JOB_NAME']}")
+print(f"metadata_base_path: {args['metadata_base_path']}")
+print(f"GITHUB_TAG: {args['github_tag']}")
+print (f"SNAPSHOT_DATE: {args['snapshot_date']}")
 
 # Init your spark script
 sc = SparkContext()
@@ -46,7 +46,7 @@ FROM postcodes
 
 postcodes.createOrReplaceTempView('postcodes')
 
-print postcodes.columns 
+print (postcodes.columns) 
 
 # Now let's create our calculated table
 calculated = spark.sql("""

@@ -1,0 +1,4 @@
+venv
+python_scripts/__pycache__/
+.DS_Store
+glue_jobs/.DS_Store
