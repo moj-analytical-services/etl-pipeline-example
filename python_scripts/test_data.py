@@ -44,7 +44,7 @@ def main():
         for i, row in enumerate(data):
             col_mismatch = list(set(row.keys()).symmetric_difference(set(colnames)))
             if len(col_mismatch) > 0:
-                error_str += f"row {i}: col mismatch: {col_mismatch.join(', ')}\n"
+                error_str += f"row {i}: col mismatch: {', '.join(col_mismatch)}\n"
                 error = True
         
         if error_str != '':

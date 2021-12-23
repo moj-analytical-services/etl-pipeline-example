@@ -16,9 +16,5 @@ def main():
     job.run_job()
     job.wait_for_completion(verbose=True)
 
-    if job.job_run_state == 'SUCCEEDED':
-        print('Job successful - cleaning up')
-        job.cleanup()
-
 if __name__ == "__main__":
     main()

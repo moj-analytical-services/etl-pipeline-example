@@ -63,14 +63,13 @@ postcodes = align_df_to_meta(postcodes, random_postcodes_meta)
 postcodes.write.mode('overwrite').format('parquet').save("s3://alpha-curated-postcodes-example/database/random_postcodes/")
 
 # A better way to define how the dataset is outputted is use the meta_data as seen below
+# The calculated dataset always writes to the snapshot_date as a partition can do this by writing directly to partition
 calculated = align_df_to_meta(calculated, calculated_meta, drop_columns=calculated_meta['partitions'])
-calculated_out = os.path.join('s3://', database_meta['bucket'], database_meta['base_folder'], calculated_meta['location'])
+calculated_out = os.path.join('s3://', database_meta['bucket'], database_meta['base_folder'], calculated_meta['location'], f"dea_snapshot_date={args['snapshot_date']}")
 # End out path with a slash
-if calculated_out[-1] == '/':
+if calculated_out[-1] != '/':
     calculated_out = calculated_out + '/'
 
-# The calculated dataset always writes to the snapshot_date as a partition can do this by writing directly to partition
-calculated_out = calculated_out + 'dea_snapshot_date={}/'.format(args['snapshot_date'])
 calculated.write.mode('overwrite').format(calculated_meta['data_format']).save(calculated_out)
 
 # Just a glue thing to add on the end of your gluejob
