@@ -25,6 +25,6 @@
             "description": "File partition denoting when the calculation was ran"
         }
     ],
-    "location": "random_postcodes",
+    "location": "calculated",
     "partitions": ["dea_snapshot_date"]
 }

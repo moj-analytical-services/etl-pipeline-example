@@ -163,6 +163,26 @@
             "name": "index",
             "type": "int",
             "description": "index from postcodes.io API"
+        },
+        {
+            "name": "codes_lsoa",
+            "type": "character",
+            "description": "codes_lsoa from postcodes.io API"
+        },
+        {
+            "name": "codes_msoa",
+            "type": "character",
+            "description": "codes_msoa from postcodes.io API"
+        },
+        {
+            "name": "codes_ccg_id",
+            "type": "character",
+            "description": "codes_ccg_id from postcodes.io API"
+        },
+        {
+            "name": "codes_lau2",
+            "type": "character",
+            "description": "codes_lau2 from postcodes.io API"
         }
     ],
     "location": "random_postcodes"

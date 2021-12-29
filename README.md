@@ -2,13 +2,21 @@
 
 An example on how to build a data ETL pipeline in the data engineering team within MoJ on the Analytical Platform with some notes about best practices.
 
+1.[Data Engineering Structure](#data-engineering-structure)
+
+2.[Problem Set](#problem-set)
+
+3.[Spark + S3 - Gotyas](#spark--s3---gotyas)
+
+4.[Data Storage Best Practice](#data-storage-best-practice)
+
 ## Data Engineering Structure
 
 ![alt text](images/data_engineering_structure.png "DE structure overview")
 
 The image above lays out the processing structure. We are going to go through an overview of why we try to adhere to this structure and will try to use the problem set above to explain how we are going to apply this structure to the problem set.
 
-The first thing to note is our tech stack. We use S3 for data storage, our transformation logic to move data from A to B is not restricted to but normally carried out in Python or Spark (SQL). These scripts are versioned on GitHub and ran as Dockerised containers on our Kubernetes Cluster. The orestration of these tasks to run our full pipeline is managed by Airflow.
+The first thing to note is our tech stack. We use S3 for data storage, our transformation logic to move data from A to B is not restricted to but normally carried out in Python or Spark (SQL). These scripts are versioned on GitHub and ran as Dockerised containers on our Kubernetes Cluster. The orchestration of these tasks to run our full pipeline is managed by Airflow.
 
 ### Landing Area
 
@@ -90,7 +98,7 @@ Some extra things to note about the processed bucket:
 
 ### Curated
 
-As discussed above this data is created from either the `raw`, `raw-hist` or `processed` bucket depending on your etl process. This stage will most likely be written in spark. If possible it's best to write your spark scripts fully in spark-SQL. This makes it easier for analysts to understand the data transforms (rather than having to understand the spark dataframe API). The curated bucket will hold the data that you expose as your Athena Database. This data does not have to follow the partitioning of the previous buckets (as you might want to partition it to make it more efficient to query or not partition it at all). An example of a curated folder structure on S3 would be:
+As discussed above this data is created from either the `raw`, `raw-hist` or `processed` bucket depending on your etl process. The data will usually be converted to parquet files (see [Data Formats](#data-formats)) to speed up subsequent queries based on this data. This stage will most likely be written in spark. If possible it's best to write your spark scripts fully in spark-SQL. This makes it easier for analysts to understand the data transforms (rather than having to understand the spark dataframe API). The curated bucket will hold the data that you expose as your Athena Database. This data does not have to follow the partitioning of the previous buckets (as you might want to partition it to make it more efficient to query or not partition it at all). An example of a curated folder structure on S3 would be:
 
 ```
 
@@ -110,17 +118,28 @@ As discussed above this data is created from either the `raw`, `raw-hist` or `pr
 │                └── data-part-1.parquet
 ```
 
-As stated before it doesn't follow the previous structures. The data structure of this bucket is more up to the data engineer and how they best think to structure the data. Something worth noting is that the data for each table is in a folder where the folder name matches the table name (matching the names just makes things easier to read). All the tables are in the same directory (this again is just good practice for easier understanding of your data structure). Something that you are restricted to (if using `etl_manager`) is that all the tables in your database must exist in the same bucket.
+As stated before, it doesn't have to follow the previous structures. The data structure of this bucket is more up to the data engineer and how they best think to structure the data. Something worth noting is that the data for each table is in a folder where the folder name matches the table name (matching the names just makes things easier to read). All the tables are in the same directory (this again is just good practice for easier understanding of your data structure). Something that you are restricted to (if using `etl_manager`) is that all the tables in your database must exist in the same bucket.
 
 Once your curated tables are produced you will want to overlay your glue schema (this is the meta data database schema that allows Athena to query the data the schema points to) over the data to make it accessible to analysts. Something to note is that because Athena is "schema on read" you can define/delete/update the schema without affecting the data underneath. You can think of the schemas that define our data as databases are just overlaid over the data (they just tell Athena how to parse the data and interpret the datasets in S3 using SQL). This means you can delete and recreate your entire database schema at the end or beginning of your ETL job (normally it is done at the end but sometimes you might want to do it at particular points of your etl pipeline if your pipeline requires to read data via the glue schemas).
 
 ## Problem Set
 
-1. We are going to get a daily extract of data from [this API](https://postcodes.io/) write it to a landing area.
-2. test the daily extract 
+1. Get a daily extract of data from [this API](https://postcodes.io/) and write it to a landing area.
+2. Test the daily extract 
 3. Add the extract to the existing database (if it exists) and create a new aggregated table in this database
 4. Apply the athena schema to the data
-5. All the above is going to be Dockerise and orchestrated by Airflow
+5. Dockerise and orchestrate all of the above using Airflow
+
+### Step 0: Pass in credentials
+
+This repo assumes that you are using aws-vault to pass in your credentials.
+See [this link](https://github.com/ministryofjustice/analytical-platform-iam/blob/main/documentation/AWS-CLI.md) for instructions on setting up your cli tool to authenticate with AWS using aws-vault.
+
+Exec into the restricted-data role, which will give you permission to write to S3 for a period of 4h:
+
+```bash
+$ aws-vault exec restricted-data -d 4h
+```
 
 ### Step 1: Get that data
 
@@ -231,7 +250,7 @@ s3_out = os.path.join(land_base_path, 'random_postcodes', f'file_land_timestamp=
 write_dicts_to_jsonl_gz(data, s3_out)
 ```
 
-The full script (where it's all put together) can be found in [python_scripts/write_data_to_land.py](python_scripts/write_data_to_land.py) this is `F0(x)` in the DE structure overview. It's also worth noting that in these python scripts we always use the convention `if __name__ == '__main__'` this is so we can run the scripts or import them - [see here for more information](https://thepythonguru.com/what-is-if-__name__-__main__/).
+The full script (where it's all put together) can be found in [python_scripts/write_data_to_land.py](python_scripts/write_data_to_land.py) this is `F0(x)` in the DE structure overview. It's also worth noting that in these python scripts we always use the convention `if __name__ == '__main__'` this is so we can run the scripts or import them - [see here for more information](https://thepythonguru.com/what-is-if-__name__-__main__/). You should check that the data has been saved to s3://mojap-land/open_data/postcodes_example/random_postcodes/.
 
 This script will be put onto a daily schedule using a dag later on. You'll note in the full script that there is an excessive amount of print statements. This is because we want to be as verbose as possible so that when logs are written to airflow it will be easier to debug if something breaks. 
 
@@ -260,7 +279,7 @@ error_str = ''
 for i, row in enumerate(data):
     col_mismatch = list(set(row.keys()).symmetric_difference(set(colnames)))
     if len(col_mismatch) > 0:
-        error_str += f"row {i}: col mismatch: {col_mismatch.join(', ')}\n"
+        error_str += f"row {i}: col mismatch: {', '.join(col_mismatch)}\n"
         error = True
 
 if error_str != '':
@@ -275,17 +294,20 @@ s3.copy_s3_object(data_path, raw_hist_out)
 s3.delete_s3_object(data_path)
 ```
 
-The full script that utilises these code snippets can be found in [python_scripts/test_data.py](python_scripts/test_data.py) this is `F1(x)` in the DE structure overview.
+The full script that utilises these code snippets can be found in [python_scripts/test_data.py](python_scripts/test_data.py) this is `F1(x)` in the DE structure overview. You should check that the data has been deleted from s3://mojap-land/open_data/postcodes_example/ and saved to s3://mojap-raw-hist/open_data/postcodes_example/random_postcodes/ with the same timestamp.
 
 ### Step 3: Create the Database Tables (using spark)
 
-In this step we are going to use spark to create our curated database (reading data from `raw-hist` and writing to `curated`) and then apply a glue meta data schema over the top of the data so it can be queried with Amazon athena. To do both of these things requires `etl_manager` the readme of this package is fairly indepth so I'm not going to reiterate information from that readme here. 
+In this step we are going to use spark to create our curated database (reading data from `raw-hist` and writing to `curated`). This requires `etl_manager`. The [readme](https://github.com/moj-analytical-services/etl_manager/blob/master/README.md) of this package is fairly indepth so I'm not going to reiterate information from that readme here. 
 
-Our spark jobs (aka glue jobs) is a pyspark script that is ran on an AWS spark server. It is used to do bigger data transformations (in parallel) that is better to keep off our cluster (which current gives you the ability to run R/Python with single CPU). When writing spark scripts try to use Spark-SQL as much as possible to make it easier for others to understand. You may find there are times when a single line of code using the spark dataframe API will achieve the same result as 10 lines of SQL (so it's up to the data engineer to make a judgement on when to deviate from Spark-SQL syntax). Because we use pyspark always use the dataframe API or Spark-SQL as these are optimised (avoid using RRDs as they will be super slow in pyspark).
+Our spark jobs (aka glue jobs) is a pyspark script that is ran on an AWS spark server. It is used to do bigger data transformations (in parallel) that is better to keep off our cluster (which current gives you the ability to run R/Python with single CPU). When writing spark scripts try to use Spark-SQL as much as possible to make it easier for others to understand. You may find there are times when a single line of code using the spark dataframe API will achieve the same result as 10 lines of SQL (so it's up to the data engineer to make a judgement on when to deviate from Spark-SQL syntax). Because we use pyspark always use the dataframe API or Spark-SQL as these are optimised (avoid using Resilient Distributed Datasets (RDDs) as they will be super slow in pyspark as summarised [here](https://databricks.com/glossary/what-is-rdd)).
 
-Our spark code is going to do two things, first read all the data from `raw-hist` and overwrite the table in curated. This is the laziest approach to updating your table (i.e. recreate it from scratch and delete the old version). However, this is the cleanest version and the one you should try first (often it's quicker than trying to do a clever update process in spark - mainly because this often requires writing more than once to S3 which is time consuming). Overwriting everything each time also allows for an easy clean up (as the overwrite means you don't often have to clean up half written files or clear out a temp folder of data you are using update your table). The second thing the spark job will do is create a calculated table (a simple group by statement) and write it to a new partition (based on the date ran) in curated.
+Our spark code is going to do two things:
 
-Here is the start of our gluejob (note that spark on AWS requires python 2.7). A lot of this stuff is standard to start off a spark job.
+1. Read **all** the data from `raw-hist` (not just new data) and overwrite the table in curated. This is the laziest approach to updating your table (i.e. recreate it from scratch and delete the old version). This is also the cleanest approach as the overwrite means you don't often have to clean up half written files or clear out a temp folder of data you are using to update your table. In addition it can be quicker than trying to do a clever update process in spark - mainly because this often requires writing more than once to S3 which is time consuming.
+2. Create a calculated table (a simple group by statement) and write it to a new partition (based on the date ran) in curated.
+
+Here is the start of our gluejob. A lot of this stuff is standard to start off a spark job.
 
 ```python
 import sys
@@ -305,10 +327,11 @@ from gluejobutils.datatypes import align_df_to_meta
 args = getResolvedOptions(sys.argv, ['JOB_NAME', 'metadata_base_path', 'github_tag', 'snapshot_date'])
 
 # Good practice to print out arguments for debugging
-print "JOB SPECS..."
-print "JOB_NAME: ", args["JOB_NAME"]
-print "GITHUB_TAG: ", args["github_tag"]
-print "SNAPSHOT_DATE: ", args["snapshot_date"]
+print("JOB SPECS...")
+print(f"JOB_NAME: {args['JOB_NAME']}")
+print(f"metadata_base_path: {args['metadata_base_path']}")
+print(f"GITHUB_TAG: {args['github_tag']}")
+print (f"SNAPSHOT_DATE: {args['snapshot_date']}")
 
 # Init your spark script
 sc = SparkContext()
@@ -355,27 +378,26 @@ postcodes = align_df_to_meta(postcodes, postcodes_meta)
 postcodes.write.mode('overwrite').format('parquet').save("s3://alpha-curated-postcodes-example/database/random_postcodes/")
 
 # A better way to define how the dataset is outputted is use the meta_data as seen below
+# The calculated dataset always writes to the snapshot_date as a partition can do this by writing directly to partition
 calculated = align_df_to_meta(calculated, calculated_meta)
-calculated_out = os.path.join('s3://', database_meta['bucket'], database_meta['base_folder'], calculated_meta['location'])
+calculated_out = os.path.join('s3://', database_meta['bucket'], database_meta['base_folder'], calculated_meta['location'], f"dea_snapshot_date={args['snapshot_date']}")
 # End out path with a slash
-if calculated_out[-1] == '/':
+if calculated_out[-1] != '/':
     calculated_out = calculated_out + '/'
 
-# The calculated dataset always writes to the snapshot_date as a partition can do this by writing directly to partition
-calculated_out = calculated_out + 'dea_snapshot_date={}/'.format(args['snapshot_date'])
 calculated.write.mode('overwrite').format(calculated['data_format']).save(calculated_out)
 
 # Just a glue thing to add on the end of your gluejob
 job.commit()
 ```
 
-The full pyspark script can be found in the following path [`glue_jobs/example_job/job.py`](glue_jobs/example_job/job.py). This is the script that is ran on AWS's spark cluster. For running stuff on the spark cluster we need to have a seperate python script to run the pyspark script. This can simply done as follows:
+The full pyspark script can be found in the following path [`glue_jobs/example_job/job.py`](glue_jobs/example_job/job.py). This is the script that is ran on AWS's spark cluster. For triggering a spark script we need to have a separate python script which is run locally. This can be simply done as follows:
 
 ```python
 from etl_manager.etl import GlueJob
 import datetime
 
-job_bucket = "alpha-curated-postcodes-example
+job_bucket = "alpha-curated-postcodes-example"
 iam_role = "airflow-postcodes-example-role"
 github_tag = "v0.0.1"
 snapshot_date = datetime.datetime.now().strftime("%Y-%m-%d")
@@ -387,19 +409,17 @@ job = GlueJob(f"glue_jobs/example_job/", bucket = job_bucket, job_role = iam_rol
 print(f'Starting job "{job.job_name}"...')
 job.run_job()
 job.wait_for_completion(verbose=True)
-
-if job.job_run_state == 'SUCCEEDED':
-    print('Job successful - cleaning up')
-    job.cleanup()
 ```
 
-The actual code we can use in this example can be found at [`python_scripts/run_glue_job.py`](python_scripts/run_glue_job.py). In the full script the parameters listed at the top of the example are defined via environmental variables this is done because the full etl pipeline will be orchestrated via airflow (running a Docker container on our kubernetes cluster). The easiest way to pass parameters to the script is to deploy a pod with environment variables that are your parameters. This allows your scripts to read in those parameters (that will be declared from the airflow script. _More on this later..._)
+You can follow the progress of the glue job on the Glue console. It will be called example_job and should take less than a minute to complete. The metadata will be saved to s3://alpha-curated-postcodes-example/_GlueJobs_/example_job/. The glue job uses the role "airflow-postcodes-example-role", see Step 5b if the job fails due to permission errors. Once the job has completed successfully, check that the data in s3://alpha-curated-postcodes-example/database/random_postcodes/ and s3://alpha-curated-postcodes-example/database/calculated/ has been updated.
+
+The actual code we can use in this example can be found at [`python_scripts/run_glue_job.py`](python_scripts/run_glue_job.py). In the full script the parameters listed at the top of the example are defined via environmental variables. This is done because the full etl pipeline will be orchestrated via airflow (running a Docker container on our kubernetes cluster). The easiest way to pass parameters to the script is to deploy a pod with environment variables that are your parameters. This allows your scripts to read in those parameters (that will be declared from the airflow script. _More on this later..._)
 
 Another note: From the code above you may notice that the script expects to be ran from the root directory of this repo. It's good practice to write your scripts with the idea that they are always running from the root directory of your repo. It makes it easier to know how each script should be called regardless if its `bash`, `python`, `R` or whatever.
 
 ### Step 4: Declare the database schema
 
-Now that the data has been processed with Spark and outputed to the curated bucket all you need to do is declare your glue schema over the top of it to allow people to access the data as a database via Athena. You can do this using the agnostic meta data schemas we have. The script is relatively painless to do this final bit (thanks etl_manager).
+Now that the data has been processed with Spark and outputed to the curated bucket, all you need to do is declare your glue schema over the top of it to allow people to access the data as a database via Athena. You can do this using the agnostic meta data schemas we have. The script is relatively painless to do this final bit (thanks etl_manager).
 
 ```python
 from etl_manager.meta import read_database_folder
@@ -411,11 +431,13 @@ db.create_glue_database()
 db.refresh_table_partitions()
 ```
 
-That's it. Remember that this is schema on read so deleting the database doesn't touch the data the glue schema points to all it does is delete the glue schema itself. It's a minor operation to create/delete and glue database so we opt to delete it and then recreate it everytime we do an update (this makes it easier if you have changed your meta-data schemas).
+That's it. Remember that this is schema on read so deleting the database doesn't touch the data the glue schema points to, all it does is delete the glue schema itself. It's a minor operation to create/delete and glue database so we opt to delete it and then recreate it everytime we do an update (this makes it easier if you have changed your meta-data schemas).
 
-If your database has tables with file partitions (like our calculated table). Then you need to run this `refresh_table_partitions` function. Otherwise if you query the table that has partitions in it Athena will return an empty table. Under the hood of the `refresh_table_partitions` is just the athena query `MSCK REPAIR TABLE db.table` for each table in the database.
+If your database has tables with file partitions (like our calculated table), then you need to run the `refresh_table_partitions` function. Otherwise if you query the table that has partitions in it Athena will return an empty table. Under the hood `refresh_table_partitions` is just the athena query `MSCK REPAIR TABLE db.table` for each table in the database.
 
-Note: The refresh partitions can take some time if your tables have a lot of partitions you can optimise this by running an `ADD PARTITION` athena query on your existing database table (with existing partitions) if you know what partitions have been added since the previous run.
+The database is called example_postcodes_db which you can query using Athena. The count of rows returned from random_postcodes should correspond to the total number of rows saved in raw_hist. This will include data present from historic runs, not just the most recent run.
+
+Note: The refresh partitions can take some time if your tables have a lot of partitions. You can optimise this by running an `ADD PARTITION` athena query on your existing database table (with existing partitions) if you know what partitions have been added since the previous run.
 
 ### Step 5: Automating via Airflow and Dockerising
 
@@ -423,7 +445,7 @@ This example is not going to go through the process of how you get the docker im
 
 #### 5a. Dockerising your Scripts
 
-This docker image is going to require python and the needed packages from start to finish. We can do this in our [`requirements.txt`](requirements.txt) file and then instally them during the docker build.
+This docker image is going to require python and the needed packages from start to finish. We can do this in our [`requirements.txt`](requirements.txt) file and then install them during the docker build.
 
 ```Dockerfile
 #define python version
@@ -449,15 +471,15 @@ Finally we need our docker file to run our python scripts for each process in ou
 ENTRYPOINT python -u python_scripts/$PYTHON_SCRIPT_NAME
 ```
 
-The full script can be found in the [Dockerfile](Dockerfile). The docker file is in the root directory as that's were concourse expects it to be when it goes off to build your Dockerfile.
+The full script can be found in the [Dockerfile](Dockerfile). The docker file is in the root directory as that's where concourse expects it to be when it goes off to build your Dockerfile.
 
 #### 5b. Create a role
 
-This is covered (as well an explaination to the `deploy.json`) in the [platform guidance](https://user-guidance.services.alpha.mojanalytics.xyz/build-deploy.html#build-and-deploy). However I am going to run through some points as this bit is arguous (WE ARE TRYING TO SIMPLIFY IT!).
+This is covered (as well an explanation to the `deploy.json`) in the [platform guidance](https://user-guidance.services.alpha.mojanalytics.xyz/build-deploy.html#build-and-deploy). However I am going to run through some points as this bit is arduous (WE ARE TRYING TO SIMPLIFY IT!).
 
 When this task runs on the platform it requires a role to run it. This role needs permissions to access S3, use Athena, Glue, run spark jobs, etc. Ideally this IAM policy should only have actions that it requires but it's difficult to know what this is. The best thing to do is to look at existing repos and see what the IAM policy is and iterate from there. Any of our repos that are deployed on airflow are prefixed with `airflow_` so it's worth looking through those / using this one as a starter. The main thing to try and ensure is that you only give s3 access to what you need for example, in this repo, we don't allow access to the `mojap-land` bucket. Instead we only give the role access to a subset of the bucket (i.e. `mojap-land/open_data/postcodes/` only what it needs to see). This project's IAM policy is again in the root dir of the repo `iam_policy.json`. Also worth noting that the list of actions you'll probably need for an etl project are [s3](https://docs.aws.amazon.com/IAM/latest/UserGuide/list_amazons3.html), [glue](https://docs.aws.amazon.com/IAM/latest/UserGuide/list_awsglue.html), [athena](https://docs.aws.amazon.com/IAM/latest/UserGuide/list_amazonathena.html) and maybe [cloudwatch](https://docs.aws.amazon.com/IAM/latest/UserGuide/list_amazoncloudwatch.html).
 
-The iam policy used for this pipeline can be found [iam_policy.json](iam_policy.json) (again in the root directory - based on how we deploy etl_pipelines). Each sid states what it's there for but here is a quick explaination as to why they are used for this policy:
+The iam policy used for this pipeline can be found [iam_policy.json](iam_policy.json) (again in the root directory - based on how we deploy etl_pipelines). Each sid states what it's there for but here is a quick explanation as to why they are used for this policy:
 
 - `list`: To list the buckets that the role needs to access. Must actions require the role to list the buckets it has to access. Note for the list policy you specify the bucket only not the path to objects (with wildcards). This is why the sid is not included with the latter ones as the resources for the listBucket action is bucket specific (instead of object specific).
 
@@ -473,7 +495,7 @@ The iam policy used for this pipeline can be found [iam_policy.json](iam_policy.
 
 #### 5c. The airflow dag
 
-In reality your airflow dag will be added this the [airflow-dags](https://github.com/moj-analytical-services/airflow-dags) repository (_again this is only visable to members of our github org_). But to encapsulate everything into one repo we've put our dag in [dags/postcodes_example_dag.py](dags/postcodes_example_dag.py). Our dag will orcestrate our tasks on a schedule that's run at a particular time each day. Remember our full process is:
+In reality your airflow dag will be added to the [airflow-dags](https://github.com/moj-analytical-services/airflow-dags) repository (_again this is only visable to members of our github org_). But to encapsulate everything into one repo we've put our dag in [dags/postcodes_example_dag.py](dags/postcodes_example_dag.py). Our dag will orcestrate our tasks on a schedule that's run at a particular time each day. Remember our full process is:
 
 ```
 extract data from API ->
